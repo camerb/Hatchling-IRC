@@ -1,10 +1,11 @@
 #include *i thirdParty\winsock2.ahk
 #include *i winsock2.ahk
-#include *i FcnLib.ahk
 #singleinstance force
 #persistent
 setbatchlines -1
 onexit exithandler
+
+;TODO load from config files
 
 ;make connection
 ws2_cleanup()
@@ -13,7 +14,7 @@ ws2_asyncselect(socket,"dataprocess")
 
 ;choose nick
 changenick(nick())
-sendData("USER " . nick() . " * * :the camerb irc client, made by camerb")
+sendData("USER " . nick() . " * * :the Hatchling IRC client, made by camerb")
 sendData("JOIN " . channel())
 
 Gui, +LastFound -Caption +ToolWindow
@@ -58,10 +59,7 @@ dataprocess(socket,data){
    static differentnick = 0
    ;msgbox % data ;for testing
    appendToScrollback(data)
-   addtotrace(data)
-
-   ;if (InStr(data, "bot"))
-      ;msgbox, Did that guy say my name?
+   ;addtotrace(data) ;for testing
 
    ;parsing
    stringtrimright,data,data,2
@@ -94,12 +92,6 @@ dataprocess(socket,data){
       }
       settimer, nick, -60000
    }
-   ;this seems to be for re-joining after getting kicked
-   else if(param2 == "KICK" && instr(data,nick()))
-      sendData("JOIN " param3)
-   ;this is for a bot similar to ChanServ (not needed for an irc client)
-   ;else if(param2 == "JOIN" && regexmatch(param3,"^(list|of|authorized|users)$"))
-      ;sendData("MODE #joe +ov " name " " name)
 }
 
 appendToScrollback(textToAppend)
@@ -149,7 +141,7 @@ awaynick()
 
 channel()
 {
-   return "##conversation"
+   return "#ahk-bots-n-such"
 }
 
 checkIfAfk()
