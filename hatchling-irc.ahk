@@ -5,11 +5,53 @@
 setbatchlines -1
 onexit exithandler
 
+random,rand,10,99
+
 ;TODO load from config files
+configFile=hatchling_config.json
+channel=#ahk-bots-n-such
+nick=hatch_%rand%
+enableAutoAwaySuffix:=false
+awaySuffix=^afk
+server=irc.freenode.net
+port=6667
+if FileExist(configFile)
+{
+   config := FileRead(configFile)
+   server := json(config, "simple.server")
+   port := json(config, "simple.port")
+   channel := json(config, "simple.channel")
+   nick := json(config, "simple.nick")
+   password := json(config, "password")
+   enableAutoAwaySuffix := json(config, "autoAway.enabled")
+   awaySuffix := json(config, "autoAway.suffix")
+   ; := json(config, "")
+;server port 
+}
+else
+{
+   FileCreate(configFile)
+}
+
+if TODOchoseTogenerateConfigWithWizard
+{
+config=
+(
+{
+   simple: {
+      server: "%server%",
+      port: "%port%",
+      channel: "%channel%",
+      nick: "%nick%"
+   }
+}
+)
+FileCreate(config, configFile)
+}
 
 ;make connection
 ws2_cleanup()
-socket:=ws2_connect("irc.freenode.net:6667")
+socket:=ws2_connect(server . ":" . port)
 ws2_asyncselect(socket,"dataprocess")
 
 ;choose nick
@@ -131,25 +173,31 @@ return
 
 nick()
 {
-   return "cam_irc"
+   global
+   return nick ;"cam_irc"
 }
 
 awaynick()
 {
-   return nick() . "^afk"
+   global
+   return nick() . awaySuffix
 }
 
 channel()
 {
-   return "#ahk-bots-n-such"
+   global
+   return channel ;"#ahk-bots-n-such"
 }
 
 checkIfAfk()
 {
-   if (A_TimeIdlePhysical > 1000 * 60 * 8)
-      changeNick(awaynick())
-   else
-      changeNick(nick())
+   if enableAutoAwaySuffix
+   {
+      if (A_TimeIdlePhysical > 1000 * 60 * 8)
+         changeNick(awaynick())
+      else
+         changeNick(nick())
+   }
 }
 
 changeNick(newNick)
