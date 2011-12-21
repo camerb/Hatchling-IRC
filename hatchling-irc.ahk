@@ -1,5 +1,14 @@
 #include *i thirdParty\winsock2.ahk
-#include *i winsock2.ahk
+#include *i thirdParty\Functions.ahk
+#include *i thirdParty\json.ahk
+#include *i thirdParty\ini.ahk
+#include *i thirdParty\FcnLib-Rewrites.ahk
+#include *i thirdParty\FcnLib--.ahk
+;#include *i thirdParty\FcnLib.ahk
+;#include *i winsock2.ahk
+;#include *i Functions.ahk
+;#include *i json.ahk
+;#include *i FcnLib-Rewrites.ahk
 #singleinstance force
 #persistent
 setbatchlines -1
@@ -15,42 +24,43 @@ enableAutoAwaySuffix:=false
 awaySuffix=^afk
 server=irc.freenode.net
 port=6667
-if FileExist(configFile)
-{
-   config := FileRead(configFile)
-   server := json(config, "simple.server")
-   port := json(config, "simple.port")
-   channel := json(config, "simple.channel")
-   nick := json(config, "simple.nick")
-   password := json(config, "password")
-   enableAutoAwaySuffix := json(config, "autoAway.enabled")
-   awaySuffix := json(config, "autoAway.suffix")
-   ; := json(config, "")
-;server port 
-}
-else
-{
-   FileCreate(configFile)
-}
+;if FileExist(configFile)
+;{
+   ;config := FileRead(configFile)
+   ;server := json(config, "simple.server")
+   ;port := json(config, "simple.port")
+   ;channel := json(config, "simple.channel")
+   ;nick := json(config, "simple.nick")
+   ;password := json(config, "password")
+   ;enableAutoAwaySuffix := json(config, "autoAway.enabled")
+   ;awaySuffix := json(config, "autoAway.suffix")
+   ;; := json(config, "")
+;;server port
+;}
+;else
+;{
+   ;FileCreate("", configFile)
+;}
 
-if TODOchoseTogenerateConfigWithWizard
-{
-config=
-(
-{
-   simple: {
-      server: "%server%",
-      port: "%port%",
-      channel: "%channel%",
-      nick: "%nick%"
-   }
-}
-)
-FileCreate(config, configFile)
-}
+;if TODOchoseTogenerateConfigWithWizard
+;{
+;config=
+;(
+;{
+   ;simple: {
+      ;server: "%server%",
+      ;port: "%port%",
+      ;channel: "%channel%",
+      ;nick: "%nick%"
+   ;}
+;}
+;)
+;FileCreate(config, configFile)
+;}
 
 ;make connection
 ws2_cleanup()
+;msgbox, % server . port
 socket:=ws2_connect(server . ":" . port)
 ws2_asyncselect(socket,"dataprocess")
 
