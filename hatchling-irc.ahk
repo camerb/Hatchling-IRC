@@ -24,23 +24,40 @@ enableAutoAwaySuffix:=false
 awaySuffix=^afk
 server=irc.freenode.net
 port=6667
-;if FileExist(configFile)
-;{
-   ;config := FileRead(configFile)
-   ;server := json(config, "simple.server")
-   ;port := json(config, "simple.port")
-   ;channel := json(config, "simple.channel")
+defaultConfig=
+(
+{
+   "simple": {
+      "server": "%server%",
+      "port": "%port%",
+      "channel": "%channel%",
+      "nick": "%nick%",
+      "password": "%password%",
+      "font_color": "%font_color%",
+      "background_color": "%background_color%",
+      "lastItem": "lastItem"
+   }
+}
+)
+
+if NOT FileExist(configFile)
+   FileAppend, %defaultConfig%, %configFile%
+   ;FileAppend, , %configFile%
+
+if FileExist(configFile)
+{
+   FileRead, config, %configFile%
+   server := json(config, "simple.server")
+   port := json(config, "simple.port")
+   channel := json(config, "simple.channel")
    ;nick := json(config, "simple.nick")
-   ;password := json(config, "password")
+   ;password := json(config, "simple.password")
    ;enableAutoAwaySuffix := json(config, "autoAway.enabled")
    ;awaySuffix := json(config, "autoAway.suffix")
+   ;TODO quit message
    ;; := json(config, "")
 ;;server port
-;}
-;else
-;{
-   ;FileCreate("", configFile)
-;}
+}
 
 ;if TODOchoseTogenerateConfigWithWizard
 ;{
@@ -69,17 +86,44 @@ changenick(nick())
 sendData("USER " . nick() . " * * :the Hatchling IRC client, made by camerb")
 sendData("JOIN " . channel())
 
-Gui, +LastFound -Caption +ToolWindow
-Gui, Add, Edit, r10 w500 vOut ReadOnly
-Gui, Add, Edit, w500 vInputText
-Gui, Add, Button, Default, Send
-Gui, Show
+Gui, +LastFound +ToolWindow
+;Gui, +LastFound -Caption +ToolWindow
+Gui, Color, , 000022
+Gui, Font, cCCCCEE,
+;WinSet, TransColor, %CustomColor% 150
+Gui, Add, Edit, x-3 y-3 w500 r10 gEditedReadOnly vOut
+Gui, Add, Edit, x-3 y134 w500 vInputText
+;Gui, Add, Edit, w500 r10 gEditedReadOnly vOut
+;Gui, Add, Edit, w500 vInputText
+Gui, Add, Button, y500 Default, Send
+Gui, Add, Button, , X
+Gui, Add, Button, , Bottom
+Gui, Add, Button, , Reload
+
+win:=WindowTitle()
+Gui, Show, h155 w300, %win%
+;TODO do better math here for screen coordinates so that everything is shown in a pretty format
+AppendToScrollback("Connecting to " . server)
 
 ;here's where we should do periodic checks, like if we should set the status to "away"
 SetTimer, checkEverySecond, 1000
 SetTimer, checkEveryTenSeconds, % 1000 * 10
 SetTimer, checkEveryMinute, % 1000 * 60
 return
+
+EditedReadOnly:
+GuiControl, Text, Edit1, %chatScrollback%
+return
+
+ButtonBottom:
+ScrollToBottom()
+return
+
+ButtonReload:
+Reload
+
+ButtonX:
+ExitApp
 
 ButtonSend:
 Gui, Submit, NoHide
@@ -92,7 +136,7 @@ if (InputText = "/EXIT")
 msg:="PRIVMSG " . channel() . " :" . InputText
 ;debug(msg)
 sendData(msg)
-appendToScrollback(nick() . ": " . InputText)
+appendToScrollback(CurrentTimestamp() . " " . nick() . ": " . InputText)
 ;GuiControl, Text, Edit1, %chatScrollback%
 GuiControl, Text, Edit2,
 return
@@ -110,9 +154,35 @@ return
 dataprocess(socket,data){
    static differentnick = 0
    ;msgbox % data ;for testing
-   appendToScrollback(data)
+   ;appendToScrollback(data)
    ;addtotrace(data) ;for testing
+   wc=(.+)
+   haystack=\:%wc%\!\~%wc%\@%wc% %wc% \#([^ ]+) ?%wc%?
+   RegExMatch(data, haystack, match)
+   nick:=match1
+   nickReg:=match2
+   location:=match3
+   command:=match4
+   channel:="#" . match5
+   ;message:=match6
+   if match6
+      RegExMatch(match6, "\:(.*)$", message)
+   ;myNick:=Nick()
+   all=%nick%\\%nickreg%\\%location%\\\%command%\\\%channel%\\\\%message%
+   if (command = "JOIN")
+      appendToScrollback(CurrentTimestamp() . " " . "Joined Channel: " . channel)
+   if (channel = channel() AND nick != nick())
+      appendToScrollback(CurrentTimestamp() . " " . nick . ": " . match6)
+   ;if InStr(data, "camerb")
+      ;appendToScrollback(nick . ": " . data)
 
+   ;appendToScrollback(command)
+
+
+;:hatch_41!~hatch_41@firewall.mitsi.com JOIN #ahk-bots-n-such
+;:camerb!~cameron@unaffiliated/camerb PRIVMSG #ahk-bots-n-such :asdfg
+
+   ;ScrollToBottom()
    ;parsing
    stringtrimright,data,data,2
    if(instr(data,"`r`n"))
@@ -131,7 +201,7 @@ dataprocess(socket,data){
    if(param1 == "PING")
    {
       sendData("PONG " param2)
-      ;checkIfAfk()
+      checkIfAfk()
    }
    ;that nick is taken, let's use a different one
    else if(instr(data,"* " . nick() . " :Nickname is already in use."))
@@ -149,10 +219,11 @@ dataprocess(socket,data){
 appendToScrollback(textToAppend)
 {
    global chatScrollback
-   chatScrollback .= "`n" . textToAppend
+   if chatScrollback
+      chatScrollback .= "`n"
+   chatScrollback .= textToAppend
    GuiControl, Text, Edit1, %chatScrollback%
-   PostMessage, 0xB1, -2, -1, Edit1, A
-   PostMessage 0xB7, , , Edit1, A
+   ScrollToBottom()
 }
 
 sendData(data){
@@ -161,7 +232,7 @@ sendData(data){
 }
 
 exithandler:
-sendData("PART " . channel())
+sendData("PART " . channel() . WindowTitle())
 sendData("QUIT")
 ws2_cleanup()
 exitapp
@@ -171,6 +242,7 @@ changeNick(nick())
 return
 
 checkEverySecond:
+;ScrollToBottom()
 return
 
 checkEveryTenSeconds:
@@ -219,4 +291,23 @@ changeNick(newNick)
       sendData(cmd)
       currentNick := newNick
    }
+}
+
+ScrollToBottom()
+{
+   win:=WindowTitle()
+   ;TODO switch to use my hwnd or my pid
+   PostMessage, 0xB1, -2, -1, Edit1, %win%
+   PostMessage, 0xB7, , , Edit1, %win%
+}
+
+WindowTitle()
+{
+   return "The Hatchling IRC Client"
+}
+
+CurrentTimestamp()
+{
+   FormatTime, returned, , [hh:mm]
+   return returned
 }
