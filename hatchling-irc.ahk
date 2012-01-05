@@ -19,7 +19,8 @@ random,rand,10,99
 ;TODO load from config files
 configFile=hatchling_config.json
 channel=#ahk-bots-n-such
-nick=hatch_%rand%
+nick=hatch_%rand%_%A_ComputerName%
+;changeNick(nick)
 enableAutoAwaySuffix:=false
 awaySuffix=^afk
 server=irc.freenode.net
@@ -136,7 +137,7 @@ if (InputText = "/EXIT")
 msg:="PRIVMSG " . channel() . " :" . InputText
 ;debug(msg)
 sendData(msg)
-appendToScrollback(CurrentTimestamp() . " " . nick() . ": " . InputText)
+appendToScrollback(nick() . ": " . InputText)
 ;GuiControl, Text, Edit1, %chatScrollback%
 GuiControl, Text, Edit2,
 return
@@ -158,6 +159,7 @@ dataprocess(socket,data){
    ;addtotrace(data) ;for testing
    wc=(.+)
    haystack=\:%wc%\!\~%wc%\@%wc% %wc% \#([^ ]+) ?%wc%?
+   ;haystack=\:(.+)\!\~(.+)\@(.+) (.+) \#([^ ]+) ?(.+)?
    RegExMatch(data, haystack, match)
    nick:=match1
    nickReg:=match2
@@ -167,22 +169,34 @@ dataprocess(socket,data){
    ;message:=match6
    if match6
       RegExMatch(match6, "\:(.*)$", message)
+   message:=message1
    ;myNick:=Nick()
    all=%nick%\\%nickreg%\\%location%\\\%command%\\\%channel%\\\\%message%
-   if (command = "JOIN")
-      appendToScrollback(CurrentTimestamp() . " " . "Joined Channel: " . channel)
-   if (channel = channel() AND nick != nick())
-      appendToScrollback(CurrentTimestamp() . " " . nick . ": " . match6)
+
+   if (nick = nick())
+   {
+      ;Things from me
+      if (command = "JOIN")
+         appendToScrollback("Joined Channel: " . channel)
+   }
+   else
+   {
+      ;Things from others
+      if (channel = channel())
+         appendToScrollback(nick . ": " . message)
+      ;if (command = "QUIT")
+         ;appendToScrollback(all)
+      ;if (command = "PART")
+         ;appendToScrollback(all)
+      ;if InStr(data, "PART")
+         ;appendToScrollback(data)
+   }
+   ;addtotrace(all)
    ;if InStr(data, "camerb")
       ;appendToScrollback(nick . ": " . data)
 
    ;appendToScrollback(command)
 
-
-;:hatch_41!~hatch_41@firewall.mitsi.com JOIN #ahk-bots-n-such
-;:camerb!~cameron@unaffiliated/camerb PRIVMSG #ahk-bots-n-such :asdfg
-
-   ;ScrollToBottom()
    ;parsing
    stringtrimright,data,data,2
    if(instr(data,"`r`n"))
@@ -219,6 +233,7 @@ dataprocess(socket,data){
 appendToScrollback(textToAppend)
 {
    global chatScrollback
+   textToAppend := CurrentTimestamp() . " " . TextToAppend
    if chatScrollback
       chatScrollback .= "`n"
    chatScrollback .= textToAppend
@@ -256,6 +271,7 @@ return
 nick()
 {
    global
+   nick:=substr(nick, 1, 16)
    return nick ;"cam_irc"
 }
 
@@ -285,6 +301,7 @@ checkIfAfk()
 changeNick(newNick)
 {
    global currentNick
+   ;newNick:=substr(newNick, 1, 16)
    if (newNick != currentNick)
    {
       cmd=NICK %newNick%
