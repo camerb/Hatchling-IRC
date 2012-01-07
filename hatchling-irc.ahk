@@ -16,15 +16,19 @@ onexit exithandler
 
 random,rand,10,99
 
+;TODO only show the tail of the scrollback, delete the rest
+;TODO figure out why Hatchling stops responding to pings
+;TODO rename occurances of nick to myNick
+
 ;TODO load from config files
 configFile=hatchling_config.json
 channel=#ahk-bots-n-such
 nick=hatch_%rand%_%A_ComputerName%
-;changeNick(nick)
 enableAutoAwaySuffix:=false
 awaySuffix=^afk
 server=irc.freenode.net
 port=6667
+nick:="camerb__" ;only for testing it in the main IRC
 defaultConfig=
 (
 {
@@ -89,8 +93,9 @@ sendData("JOIN " . channel())
 
 Gui, +LastFound +ToolWindow
 ;Gui, +LastFound -Caption +ToolWindow
-Gui, Color, , 000022
+Gui, Color, , 000020
 Gui, Font, cCCCCEE,
+;TODO change font to Consolas Normal 10 (by default)
 ;WinSet, TransColor, %CustomColor% 150
 Gui, Add, Edit, x-3 y-3 w500 r10 gEditedReadOnly vOut
 Gui, Add, Edit, x-3 y134 w500 vInputText
@@ -102,9 +107,10 @@ Gui, Add, Button, , Bottom
 Gui, Add, Button, , Reload
 
 win:=WindowTitle()
-Gui, Show, h155 w300, %win%
+Gui, Show, h155 w480, %win%
+;Gui, Show, h155 w500, %win%
 ;TODO do better math here for screen coordinates so that everything is shown in a pretty format
-AppendToScrollback("Connecting to " . server)
+AppendToScrollback("Connecting to " . server  . " as " . nick())
 
 ;here's where we should do periodic checks, like if we should set the status to "away"
 SetTimer, checkEverySecond, 1000
@@ -154,24 +160,23 @@ return
 
 dataprocess(socket,data){
    static differentnick = 0
-   ;msgbox % data ;for testing
-   ;appendToScrollback(data)
-   ;addtotrace(data) ;for testing
    wc=(.+)
-   haystack=\:%wc%\!\~%wc%\@%wc% %wc% \#([^ ]+) ?%wc%?
-   ;haystack=\:(.+)\!\~(.+)\@(.+) (.+) \#([^ ]+) ?(.+)?
+   ns=([^ ]+)
+   haystack=\:%wc%\!%wc%\@%ns% %ns% (\#[^ ]+)? ?%wc%?
+   ;haystack=\:(.+)\!(.+)\@([^ ]+) ([^ ]+) (\#[^ ]+)? (.+)?
    RegExMatch(data, haystack, match)
    nick:=match1
    nickReg:=match2
    location:=match3
    command:=match4
-   channel:="#" . match5
-   ;message:=match6
+   channel:=match5
    if match6
       RegExMatch(match6, "\:(.*)$", message)
    message:=message1
-   ;myNick:=Nick()
    all=%nick%\\%nickreg%\\%location%\\\%command%\\\%channel%\\\\%message%
+
+   addtotrace(data) ;for testing
+   addtotrace(all) ;for testing
 
    if (nick = nick())
    {
@@ -184,37 +189,36 @@ dataprocess(socket,data){
       ;Things from others
       if (channel = channel())
          appendToScrollback(nick . ": " . message)
-      ;if (command = "QUIT")
-         ;appendToScrollback(all)
-      ;if (command = "PART")
-         ;appendToScrollback(all)
-      ;if InStr(data, "PART")
-         ;appendToScrollback(data)
+         ;TODO need to support `tACTION ... (/me)
+      if (command = "JOIN")
+         appendToScrollback(nick . " has joined.")
+      if (command = "PART") ;note that this is for one channel only
+         appendToScrollback(nick . " has left.")
+      if (command = "QUIT") ;note that this is for all channels
+         appendToScrollback(nick . " has left.")
    }
-   ;addtotrace(all)
-   ;if InStr(data, "camerb")
-      ;appendToScrollback(nick . ": " . data)
-
-   ;appendToScrollback(command)
 
    ;parsing
-   stringtrimright,data,data,2
-   if(instr(data,"`r`n"))
+   StringTrimRight, data, data, 2
+   if InStr(data,"`r`n")
    {
-      stringreplace,data,data,`r`n`r`n,`r`n
-      loop,%data%,`n,`r
-         dataprocess(socket,a_loopfield)
+      StringReplace, data, data, `r`n`r`n, `r`n
+      Loop, %data%, `n, `r
+         dataprocess(socket, A_LoopField)
       return
    }
 
    ;parsing
-   stringsplit,param,data,%a_space%
-   name:=substr(data,2,instr(data,"!")-2)
+   StringSplit, param, data, %A_Space%
+   name := SubStr(data, 2, InStr(data,"!")-2 )
+   AppendToCsv(param1, param2, param3, data)
 
    ;respond to a ping, let them know we are here
    if(param1 == "PING")
    {
-      sendData("PONG " param2)
+      sendData("PONG " . param2)
+      ;appendToScrollback("PONG!!!")
+      ;addToTrace("PONG!!!") ;for testing
       checkIfAfk()
    }
    ;that nick is taken, let's use a different one
@@ -222,11 +226,11 @@ dataprocess(socket,data){
    {
       if(differentnick = 0)
       {
-         random,rand,11111,99999
+         Random, rand, 11111, 99999
          changenick(nick() . rand)
          differentnick := 1
       }
-      settimer, nick, -60000
+      SetTimer, nick, -60000
    }
 }
 
@@ -237,6 +241,7 @@ appendToScrollback(textToAppend)
    if chatScrollback
       chatScrollback .= "`n"
    chatScrollback .= textToAppend
+   chatScrollback := SubStr(chatScrollback, -3000)
    GuiControl, Text, Edit1, %chatScrollback%
    ScrollToBottom()
 }
@@ -327,4 +332,10 @@ CurrentTimestamp()
 {
    FormatTime, returned, , [hh:mm]
    return returned
+}
+
+AppendToCsv(t1, t2, t3, t4)
+{
+   text="%t1%","%t2%","%t3%","%t4%"`r`n
+   FileAppend, %text%, C:\Dropbox\Public\logs\irc.csv
 }
