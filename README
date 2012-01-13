@@ -1,3 +1,17 @@
-Hatchling IRC is a simple IRC client written in AutoHotkey (AHK_basic). Many of the features that we'd like to put in to Hatchling are a mixture of ideas that are inspired by Irssi, Pidgin, and the hope that everything in the IRC client can be configured in one easy-to-edit config file. If you're part of the AutoHotkey community, feel free to contribute to this project so that it ends up being pretty friggin awesome.
+Hatchling IRC is a simple IRC client written in AutoHotkey (AHK_basic).
+Many of the features that we'd like to put in to Hatchling are a mixture
+of ideas that are inspired by Irssi, Pidgin, and the hope that everything
+in the IRC client can be configured in one easy-to-edit config file. If
+you're part of the AutoHotkey community, feel free to contribute to this
+project so that it ends up being pretty friggin awesome.
 
-From Cameron: In addition, I have my own little features that I want to throw in, but I plan on doing this in a way that all of my crazy features will be disabled in a default install of Hatchling, or by clearing the config file. In the end, a blank install of Hatchling should give you the simplest IRC client possible, with no bells or whistles.
+From Cameron: In addition, I have my own little features that I want to
+throw in, but I plan on doing this in a way that all of my crazy features
+will be disabled in a default install of Hatchling, or by clearing the
+config file. In the end, a blank install of Hatchling should give you the
+simplest IRC client possible, with no bells or whistles.
+
+Also, because we want to avoid feature-creep, some feature requests will
+be automatically rejected. Already in this list are:
+  - Edits to the config file using the Hatchling GUI
+        (everyone already has a text editor, just use that instead)
