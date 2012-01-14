@@ -33,6 +33,13 @@ autoAwayTimeout:=json(newConfig, "autoAwaySuffixChange.timeout")
 awaySuffix:=json(newConfig, "autoAwaySuffixChange.suffix")
 ;nick:="camerb__" ;only for testing it in the main IRC
 
+if NOT (server AND port)
+{
+   msg=Error!!!`n`nServer: %server%`nPort: %port%
+   msgbox, % msg
+   ExitApp
+}
+
 ;make connection to server
 ws2_cleanup()
 socket:=ws2_connect(server . ":" . port)
@@ -65,6 +72,7 @@ Gui, Add, Button, , Reload
 
 win:=WindowTitle()
 Gui, Show, h154 w478, %win%
+;FIXME the coordinates appear to be correct for AHK_basic, but incorrect on AHK_L
 ;TODO do better math here for screen coordinates so that everything is shown in a pretty format
 AppendToScrollback("Connecting to " . server  . " as " . nick())
 
@@ -78,6 +86,7 @@ return
 
 ;{{{ TODOs
 ;I THINK I FIXED THESE
+;TODO log scrollback to a file
 ;TODO only show the tail of the scrollback, delete the rest
 ;TODO figure out why Hatchling stops responding to pings
 
@@ -98,6 +107,7 @@ return
 
 ;{{{ Misc Handlers
 ButtonClose:
+GuiClose:
 ButtonX:
 ExitApp
 
@@ -107,7 +117,7 @@ sendData("QUIT")
 ws2_cleanup()
 exitapp
 
-;TODO figure out WTH this label is for!
+;forces the top box to act as read only
 EditedReadOnly:
 GuiControl, Text, Edit1, %chatScrollback%
 return
@@ -127,7 +137,14 @@ if (InputText = "/QUIT")
 if (InputText = "/EXIT")
    GoSub, exithandler
 
-msg:="PRIVMSG " . channel() . " :" . InputText
+command:="PRIVMSG"
+if RegExMatch(InputText, "^\/([^ ]+) (.+)$", match)
+{
+   command := match1
+   InputText := match2
+}
+
+msg:=command . " " . channel() . " :" . InputText
 GuiControl, Text, Edit2,
 appendToScrollback(nick() . ": " . InputText)
 sendData(msg)
@@ -222,7 +239,8 @@ DataProcess(socket, data)
    }
    ;that nick is taken, let's use a different one
    ;FIXME this does not work ... I kinda want to do it differently, anyway
-;:niven.freenode.net 433 * camerb__ :Nickname is already in use.
+;:niven.freenode.net 433 * camerb__ :Nickname is already in use.
+
    ;else if(instr(data,"* " . nick() . " :Nickname is already in use."))
    ;if (command = "433")
    ;{
@@ -304,10 +322,13 @@ changeNick(newNick)
 
 ScrollToBottom()
 {
+   DetectHiddenWindows, On
    win:=WindowTitle()
    ;TODO switch to use my hwnd or my pid
    PostMessage, 0xB1, -2, -1, Edit1, %win%
+
    PostMessage, 0xB7, , , Edit1, %win%
+   DetectHiddenWindows, Off
 }
 
 WindowTitle()
@@ -321,11 +342,11 @@ CurrentTimestamp()
    return returned
 }
 
-AppendToCsv(t1, t2, t3, t4)
+AppendToCsv(t1, t2, t3, t4, t5)
 {
    ;text="%t1%","%t2%","%t3%","%t4%"`r`n
    ;text=%t1%,%t2%,%t3%,%t4%`r`n
-   text=%t1%,%t2%,%t3%,%t4%`n
+   text=%t1%,%t2%,%t3%,%t4%,%t5%`n
    FileAppend, %text%, C:\Dropbox\Public\logs\irc.csv
 }
 
@@ -363,21 +384,23 @@ jsonLength(jsonBlob, address)
 }
 ;}}}
 
-;{{{ LoadConfig()
+;{{{ LoadConfig() function (will process the existing config + populate new elements)
 LoadConfig()
 {
    global
    configFile=hatchling_config.json
+   serverConfigPlaceholder="ZZZserverConfigHereZZZ"
 
-;get defaultConfig
 defaultConfig=
 (
 {
    "config": {
-      //awesome or barebones (or minimalist)
+      //awesome or minimalist
       "auto_generation_of_new_elements": "awesome"
    },
-   "servers": ZZZserverConfigHereZZZ,
+   //Hatchling only supports one server and one channel at present.
+   //All other servers and channels will be ignored.
+   "servers": %serverConfigPlaceholder%,
    "appearance": {
       "font_color": "CCCCEE",
       "background_color": "000020"
@@ -396,7 +419,6 @@ defaultConfig=
 defaultServerConfig=
 (
 [{
-      //Hatchling only supports one server and one channel at present. All other servers and channels will be ignored.
       "server": "irc.freenode.net",
       "port": "6667",
       "nick": "hatch_%rand%",
@@ -407,28 +429,35 @@ defaultServerConfig=
    }]
 )
 
-   ;TODO need to have two default configs:
-   ;  one for the newest, latest, greatest featureset (most of these will be used by camerb)
-   ;  one for the limited, barebones functionality featureset
-
    ;get config from file
    if FileExist(configFile)
       FileRead, config, %configFile%
 
+   ;Will have two default configs:
+   ;  one for the newest, latest, greatest featureset (most of these will be used by camerb)
+   ;  one for the limited, barebones functionality featureset
+   ;adjust the default config if the existing config is minimalist
    autoGenerationStyle := json(config, "config.auto_generation_of_new_elements")
    if InStr(autoGenerationStyle, "minimalist")
    {
       json(defaultConfig, "config.auto_generation_of_new_elements", "minimalist")
-      fg := CompositeColorBrightness( json(config, "appearance.font_color") )
-      bg := CompositeColorBrightness( json(config, "appearance.background_color") )
-      json(defaultConfig, "appearance.font_color", bg < 22 ? "FFFFFF" : "000000")
-      json(defaultConfig, "appearance.background_color", fg < 22 ? "FFFFFF" : "000000")
-      ;TODO maybe we could check to see to ensure that bg/fg colors will produce visible text
+      json(defaultConfig, "appearance.font_color", "000000")
+      json(defaultConfig, "appearance.background_color", "FFFFFF")
+      json(defaultConfig, "autoAwaySuffixChange.enable", false)
    }
 
-   ;loop over each config item and put it in config if blank
+   ;if either the fg or bg isn't there, we'll set them both to default
+   ;  (this is because we don't trust them to pick only part of the color scheme)
+   ;FIXME - doesn't work at all
+   ;if NOT json(config, "appearance.font_color") OR NOT json(config, "appearance.background_color")
+   ;{
+      ;json(config, "appearance.font_color", "")
+      ;json(config, "appearance.background_color", "")
+   ;}
+
+   ;migrate each item to the new config
    newConfig := defaultConfig
-   configItems := "appearance.font_color,appearance.background_color,autoAwaySuffixChange.enable,autoAwaySuffixChange.timeout,autoAwaySuffixChange.suffix"
+   configItems := "appearance.font_color,appearance.background_color,autoAwaySuffixChange.enable,autoAwaySuffixChange.timeout,autoAwaySuffixChange.suffix,debug.showAllButtons"
    Loop, parse, configItems, CSV
    {
       thisItem := A_LoopField
@@ -436,19 +465,17 @@ defaultServerConfig=
       fromDefault := json(defaultConfig, thisItem)
       newValue := strlen(fromFile) ? fromFile : fromDefault
       json(newConfig, thisItem, newValue)
+      ;FIXME - make it so that true/false values show in the config as true/false, not 0/1
    }
 
-   serversList:=json(config, "servers")
-   ;msgbox % serversList
-   ;msgbox % defaultServerConfig
-   if serversList
-      newConfig:=RegExReplace(newConfig, "ZZZserverConfigHereZZZ", serversList)
+   ;move the servers/channels config to the new config (only if it looks good)
+   existingServerConfig:=json(config, "servers")
+   firstChannel:=json(config, "servers[0].channels[0].name")
+   if firstChannel
+      newServerConfig := existingServerConfig
    else
-      newConfig:=RegExReplace(newConfig, "ZZZserverConfigHereZZZ", defaultServerConfig)
-
-   ;json(config, "simple", "hi")
-   joe:=json(config, "servers")
-   addtotrace(joe)
+      newServerConfig := defaultServerConfig
+   newConfig:=RegExReplace(newConfig, serverConfigPlaceholder, newServerConfig)
 
    ;write the entire config, if we added new elements
    if (newConfig != config)
