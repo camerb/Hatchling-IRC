@@ -40,16 +40,6 @@ if NOT (server AND port)
    ExitApp
 }
 
-;make connection to server
-ws2_cleanup()
-socket:=ws2_connect(server . ":" . port)
-ws2_asyncselect(socket,"dataprocess")
-
-;choose nick
-changenick(nick())
-sendData("USER " . nick() . " * * :the Hatchling IRC client, made by camerb")
-sendData("JOIN " . channel())
-
 Gui, +LastFound
 ;Gui, -Caption
 
@@ -74,7 +64,18 @@ win:=WindowTitle()
 Gui, Show, h154 w478, %win%
 ;FIXME the coordinates appear to be correct for AHK_basic, but incorrect on AHK_L
 ;TODO do better math here for screen coordinates so that everything is shown in a pretty format
+
+;make connection to server
+ws2_cleanup()
 AppendToScrollback("Connecting to " . server  . " as " . nick())
+socket:=ws2_connect(server . ":" . port)
+ws2_asyncselect(socket,"dataprocess")
+
+;choose nick
+changenick(nick())
+sendData("USER " . nick() . " * * :the Hatchling IRC client, made by camerb")
+sendData("JOIN " . channel())
+
 
 ;here's where we should do periodic checks, like if we should set the status to "away"
 SetTimer, checkEverySecond, 1000
