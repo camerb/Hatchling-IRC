@@ -26,12 +26,14 @@ config := LoadConfig()
 server:=json(newConfig, "servers[0].server")
 port:=json(newConfig, "servers[0].port")
 channel:=json(newConfig, "servers[0].channels[0].name")
-nick:=json(newConfig, "servers[0].nick")
+myPreferredNick:=json(newConfig, "servers[0].nick")
 password:=json(newConfig, "servers[0].password")
 enableAutoAwaySuffix:=json(newConfig, "autoAwaySuffixChange.enable")
 autoAwayTimeout:=json(newConfig, "autoAwaySuffixChange.timeout")
 awaySuffix:=json(newConfig, "autoAwaySuffixChange.suffix")
-;nick:="camerb__" ;only for testing it in the main IRC
+scrollbackLogFolder:=json(newConfig, "logging.logFolder")
+myNick:=myPreferredNick
+;myNick:="camerb__" ;only for testing it in the main IRC
 
 if NOT (server AND port)
 {
@@ -67,15 +69,15 @@ Gui, Show, h154 w478, %win%
 
 ;make connection to server
 ws2_cleanup()
-AppendToScrollback("Connecting to " . server  . " as " . nick())
+AppendToScrollback("Connecting to " . server  . " as " . myNick())
 socket:=ws2_connect(server . ":" . port)
 ws2_asyncselect(socket,"dataprocess")
 
 ;choose nick
-changenick(nick())
-sendData("USER " . nick() . " * * :the Hatchling IRC client, made by camerb")
+sendData("NICK " . mynick())
+sendData("USER " . myNick() . " * * :the Hatchling IRC client, made by camerb")
 sendData("JOIN " . channel())
-
+;msgbox, hi
 
 ;here's where we should do periodic checks, like if we should set the status to "away"
 SetTimer, checkEverySecond, 1000
@@ -88,12 +90,16 @@ return
 ;{{{ TODOs
 ;I THINK I FIXED THESE
 ;TODO log scrollback to a file
-;TODO only show the tail of the scrollback, delete the rest
-;TODO figure out why Hatchling stops responding to pings
+;TODO only show the tail of the scrollback, delete the rest FIXED
+;TODO figure out why Hatchling stops responding to pings FIXED
 
 ;TODO rename occurances of nick to myNick
 ;TODO send message asking other occurances of my nick to log out if they are inactive
 ;TODO automatically change my nick to my desired nick if that nick is available
+;TODO NICKS:::
+;myPreferredNick
+;myCurrentNick
+;myAwayNick
 
 ;TODO identify
 ;TODO ipc gui? - I don't think I need to do this
@@ -101,7 +107,7 @@ return
 ;TODO config files
 
 ;TODO ip lookup /INFO
-;TODO nick lookup (automatically displayed?)
+;TODO nick owner lookup (automatically displayed?)
 ;TODO window to look at recent pastebin
 ;TODO button to run recent pastebin
 ;}}}
@@ -139,20 +145,20 @@ if (InputText = "/EXIT")
    GoSub, exithandler
 
 command:="PRIVMSG"
-if RegExMatch(InputText, "^\/([^ ]+) (.+)$", match)
-{
-   command := match1
-   InputText := match2
-}
+;if RegExMatch(InputText, "^\/([^ ]+) (.+)$", match)
+;{
+   ;command := match1
+   ;InputText := match2
+;}
 
 msg:=command . " " . channel() . " :" . InputText
 GuiControl, Text, Edit2,
-appendToScrollback(nick() . ": " . InputText)
+appendToScrollback(myNick() . ": " . InputText)
 sendData(msg)
 return
 
 nick:
-changeNick(nick())
+changeNick(myNick())
 return
 ;}}}
 
@@ -172,7 +178,6 @@ return
 ;{{{ DataProcess() function (executes every time a message is received)
 DataProcess(socket, data)
 {
-   static differentnick = 0
    wc=(.+)
    ns=([^ ]+)
    haystack=\:%wc%\!%wc%\@%ns% %ns% (\#[^ ]+)? ?%wc%?
@@ -188,10 +193,11 @@ DataProcess(socket, data)
    message:=message1
    all=%nick%\\%nickreg%\\%location%\\\%command%\\\%channel%\\\\%message%
 
-   addtotrace(data) ;for testing
+   ;addtotrace(data) ;for testing
+   ;appendToScrollback(data) ;for testing
    ;addtotrace(all) ;for testing
 
-   if (nick = nick())
+   if (nick = myNick())
    {
       ;Things from me
       if (command = "JOIN")
@@ -223,7 +229,7 @@ DataProcess(socket, data)
    }
 
    RegExMatch(data, "^([^ ]+)? ?([^ ]+)? ?([^ ]+)? ?(.+)?$", param)
-   ;AppendToCsv(param1, param2, param3, param4, data)
+   AppendToCsv(param1, param2, param3, param4, data)
 
    ;parsing
    StringSplit, param, data, %A_Space%
@@ -261,40 +267,61 @@ DataProcess(socket, data)
 AppendToScrollback(textToAppend)
 {
    global chatScrollback
-   textToAppend := CurrentTimestamp() . " " . TextToAppend
+   global scrollbackLogFolder
+
+   ;figure out what we are going to append
    if chatScrollback
-      chatScrollback .= "`n"
+      optionalLF := "`n"
+   textToAppend := optionalLF . CurrentTimestamp() . " " . TextToAppend
+
+   ;Append to file, if desired
+   if scrollbackLogFolder
+   {
+      ;TODO put the channel name in the path
+      ;TODO put the date in the filename
+      ;TODO optional disable of putting date in filename (one file)
+      FileCreateDir, %scrollbackLogFolder%
+      scrollbackLogFile := scrollbackLogFolder . "\log.txt"
+      FileAppend, %textToAppend%, %scrollbackLogFile%
+   }
+
+   ;Append it to screen
    chatScrollback .= textToAppend
    chatScrollback := SubStr(chatScrollback, -3000)
    GuiControl, Text, Edit1, %chatScrollback%
    ScrollToBottom()
 }
 
-sendData(data){
+sendData(data)
+{
    global socket
    ws2_senddata(socket,data "`r`n")
+   ;appendToScrollback(data)
 }
 
-nick()
+myNick()
 {
    global
-   nick:=substr(nick, 1, 16)
-   return nick ;"cam_irc"
+
+   ;REMOVEME not the right place for this, but it seems to have solved some weirdnesses
+   myNick:=substr(myNick, 1, 16)
+
+   return myNick
 }
 
-awaynick()
+awayNick()
 {
    global
    awaylen := strlen(awaySuffix)
-   nick:=substr(nick(), 1, 16 - awaylen)
-   return nick . awaySuffix
+   myPreferredNick:=substr(myPreferredNick, 1, 16 - awaylen)
+   return myPreferredNick . awaySuffix
 }
 
 channel()
 {
    ;should only send to the currently selected channel
    global
-   return channel ;"#ahk-bots-n-such"
+   return channel
 }
 
 checkIfAfk()
@@ -303,20 +330,24 @@ checkIfAfk()
    if enableAutoAwaySuffix
    {
       if (A_TimeIdlePhysical > 1000 * 60 * autoAwayTimeout)
-         changeNick(awaynick())
+         changeNick(awayNick())
       else
-         changeNick(nick())
+         changeNick(myNick())
    }
 }
 
 changeNick(newNick)
 {
+   global myNick
    global currentNick
-   ;newNick:=substr(newNick, 1, 16)
-   if (newNick != currentNick)
+   newNick:=substr(newNick, 1, 16)
+   if (newNick != myNick)
    {
       cmd=NICK %newNick%
       sendData(cmd)
+
+      ;TODO wait to do this until we hear a confirmation from the server
+      myNick := newNick
       currentNick := newNick
    }
 }
@@ -327,7 +358,6 @@ ScrollToBottom()
    win:=WindowTitle()
    ;TODO switch to use my hwnd or my pid
    PostMessage, 0xB1, -2, -1, Edit1, %win%
-
    PostMessage, 0xB7, , , Edit1, %win%
    DetectHiddenWindows, Off
 }
@@ -410,6 +440,9 @@ defaultConfig=
       "enable": false,
       "timeout": "8",
       "suffix": "^afk"
+   },
+   "logging": {
+      "logFolder": "C:\irc-logs"
    },
    "debug": {
       "showAllButtons": false
